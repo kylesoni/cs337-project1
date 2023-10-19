@@ -1,18 +1,31 @@
 import pandas as pd
 import re
+from ftfy import fix_text
+from unidecode import unidecode
 
 # Import data from json file
 df = pd.read_json('data\\gg2013.json')
 
 # Get only the body of the tweets (ignore username, etc.) and clean it up
 text = df['text']
-clean_text = text.str.replace(r'[^a-zA-Z0-9 ]+', '').str.replace(r'\s+', ' ').str.strip()
+text = text.tolist()
+
+for tweet in text:
+    tweet = fix_text(tweet)
+    tweet = unidecode(tweet)
+    tweet = " ".join(tweet.split())
 
 # Regular Expressions for winners
-win_exprs = ['wins']
+win_exprs = ['(wins|Wins|WINS|receives|received|won)(?= best| Best| BEST)']
 
-for expr in win_exprs:
-    matched_tweets = df.text[df.text.str.match(expr)].to_list()
-    print(matched_tweets[0])
-    for tweet in matched_tweets:
+# Regular Expressiosn for hosts
+host_exprs = []
+
+for tweet in text:
+    for expr in win_exprs:
+        # example regex use
+        var = re.findall(r"(.+) " + expr + " (.+)", tweet)
+        if var:
+            print(var)
+    for expr in host_exprs:
         pass
