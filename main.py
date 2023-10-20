@@ -23,10 +23,15 @@ for tweet in text:
     tweet = " ".join(tweet.split())
 
 # Regular Expressions for winners
-win_exprs = ['(wins|Wins|WINS|receives|received|won)(?= best| Best| BEST)']
+win_exprs = ['(wins|Wins|WINS|receives|received|won)(?= best| Best| BEST)', '(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)']
 
 # Regular Expressiosn for hosts
-host_exprs = []
+host_exprs = ['(hosts?|Hosts?|HOSTS?|hosted by)[?!(will|should)]']
+
+# Regular Expression for nominees
+nom_exprs = ['[?!(pretend|fake|was not|is not)](nominees?|Nominees?|NOMINEES?|nominated?)']
+
+presenter_exprs = ['(presenters?|Presenters?|PRESENTERS?|presented by|present(ed|s|ing))']
 
 # Intialize Candidate Lists
 win_candidates = []
