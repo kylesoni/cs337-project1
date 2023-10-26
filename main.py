@@ -42,32 +42,52 @@ category_count = -1
 
 test = []
 
-for tweet in text:
-    for expr in win_exprs:
-        # example regex use
-        var = re.findall(r"(.+) " + expr + " (.+)", tweet)
-        if var:
-            win_candidates.append([])
-            win_count += 1
-            category_candidates.append([])
-            category_count += 1
-            test.append(var)
-            before = var[0][0].rsplit(None, var[0][0].count(' '))
-            for i in range(0, len(before)):
-                new_candidate = before[-1]
-                for j in range(0, i):
-                    new_candidate = before[len(before) - j - 2] + " " + new_candidate
-                win_candidates[win_count].append(new_candidate)
-            after = var[0][2].rsplit(None, var[0][2].count(' '))
-            for i in range(0, len(after)):
-                new_candidate = after[0]
-                for j in range(0, i):
-                    new_candidate = new_candidate + " " + after[1 + j]
-                category_candidates[category_count].append(new_candidate)
+# for tweet in text:
+#     for expr in win_exprs:
+#         # example regex use
+#         var = re.findall(r"(.+) " + expr + " (.+)", tweet)
+#         if var:
+#             win_candidates.append([])
+#             win_count += 1
+#             category_candidates.append([])
+#             category_count += 1
+#             test.append(var)
+#             before = var[0][0].rsplit(None, var[0][0].count(' '))
+#             for i in range(0, len(before)):
+#                 new_candidate = before[-1]
+#                 for j in range(0, i):
+#                     new_candidate = before[len(before) - j - 2] + " " + new_candidate
+#                 win_candidates[win_count].append(new_candidate)
+#             after = var[0][2].rsplit(None, var[0][2].count(' '))
+#             for i in range(0, len(after)):
+#                 new_candidate = after[0]
+#                 for j in range(0, i):
+#                     new_candidate = new_candidate + " " + after[1 + j]
+#                 category_candidates[category_count].append(new_candidate)
             
-    for expr in host_exprs:
-        pass
+    # for expr in host_exprs:
+    #     pass
 
 #print(win_candidates[1])
 #print(category_candidates[1])
 #print(test[1][0][0])
+
+gold_categories = ["Best Screenplay - Motion Picture", "Best Director - Motion Picture", "Best Actress in a Motion Picture - Drama"]
+gold_nominees = [["Zero Dark Thirty", "Lincoln", "Silver Linings Playbook", "Argo", "Django Unchained"], ["Ben Affleck", "Kathryn Bigelow", "Ang Lee", "Steven Spielberg", "Quentin Tarantino"], ["Jessica Chastain"]]
+win_candidates = [[] for i in range(len(gold_categories))]
+
+def winners_from_cats_noms(categories, nominees, tweet, filt_expr):
+    for cat_i, cat in enumerate(categories):
+        if re.search(cat, tweet):
+                before = filt_expr[0][0].rsplit(None, 0)
+                for nom in nominees[cat_i]:
+                     if re.search(nom, str(before[0])):
+                          win_candidates[cat_i].append(nom)
+
+for tweet in text:
+    for expr in win_exprs:
+        var = re.findall(r"(.+) " + expr + " (.+)", tweet)
+        if var:
+            winners_from_cats_noms(gold_categories, gold_nominees, tweet, var)
+
+print(win_candidates)
