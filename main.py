@@ -72,8 +72,24 @@ test = []
 #print(category_candidates[1])
 #print(test[1][0][0])
 
-gold_categories = ["Best Screenplay - Motion Picture", "Best Director - Motion Picture", "Best Actress in a Motion Picture - Drama"]
-gold_nominees = [["Zero Dark Thirty", "Lincoln", "Silver Linings Playbook", "Argo", "Django Unchained"], ["Ben Affleck", "Kathryn Bigelow", "Ang Lee", "Steven Spielberg", "Quentin Tarantino"], ["Jessica Chastain"]]
+gold_categories = ["Best Screenplay - Motion Picture", 
+                   "Best Director - Motion Picture", 
+                   "Best Performance by an Actress in a Television Series - Comedy or Musical", 
+                   "Best Foreign Language Film",
+                   "Best Performance by an Actor in a Supporting Role in a Motion Picture",
+                   "Best Performance by an Actress in a Supporting Role in a Series, Mini-Series or Motion Picture Made for Television",
+                   "Best Motion Picture - Comedy or Musical",
+                   "Best Actress in a Motion Picture - Comedy or Musical",
+                   "Best Actress in a Motion Picture - Drama"]
+gold_nominees = [["Zero Dark Thirty", "Lincoln", "Silver Linings Playbook", "Argo", "Django Unchained"], 
+                 ["Ben Affleck", "Kathryn Bigelow", "Ang Lee", "Steven Spielberg", "Quentin Tarantino"],
+                 ["Zooey Deschanel", "Tina fey", "Julia Louis-Dreyfus", "Amy Poehler", "Lena Dunham"],
+                 ["The Intouchables", "Kon Tiki", "A Royal Affair", "Rust and Bone", "Amour"],
+                 ["Alan Arkin", "Leonardo Dicaprio", "Philip Seymour Hoffman", "Tommy Lee Jones", "Christoph Waltz"],
+                 ["Hayden Panettiere", "Archie Panjabi", "Sarah Paulson", "Sofia Vergara", "Maggie Smith"],
+                 ["The Best Exotic Marigold Hotel", "Moonrise Kingdom", "Salmon Fishing in the Yemen", "Silver Linings Playbook", "Les Miserables"],
+                 ["Emily Blunt", "Judi Dench", "Maggie Smith", "Meryl Streep", "Jennifer Lawrence"],
+                 ["Jessica Chastain"]]
 win_candidates = [[] for i in range(len(gold_categories))]
 
 def winners_from_cats_noms(categories, nominees, tweet, filt_expr):
@@ -82,7 +98,27 @@ def winners_from_cats_noms(categories, nominees, tweet, filt_expr):
                 before = filt_expr[0][0].rsplit(None, 0)
                 for nom in nominees[cat_i]:
                      if re.search(nom, str(before[0])):
-                          win_candidates[cat_i].append(nom)
+                          win_candidates[cat_i].append((nom, 10))
+                after = filt_expr[0][0].rsplit(None, 0)
+                for nom in nominees[cat_i]:
+                     if re.search(nom, str(after[0])):
+                          win_candidates[cat_i].append((nom, 10))
+
+def total_votes(candidate_list, max_winner):
+    actual_candidates = [[] for x in range(len(candidate_list))]
+    weights = [[] for x in range(len(candidate_list))]
+    for i, category in enumerate(candidate_list):
+        for thing in category:
+            if thing[0] not in actual_candidates[i]:
+                actual_candidates[i].append(thing[0])
+                weights[i].append(thing[1])
+            else:
+                weights[i][actual_candidates[i].index(thing[0])] += thing[1]
+        actual_candidates[i] = [x for _, x in sorted(zip(weights[i], actual_candidates[i]), key=lambda pair: pair[0], reverse=True)]
+    for i in range(len(actual_candidates)):
+        if len(actual_candidates[i]) > 0:
+            actual_candidates[i] = actual_candidates[i][0]
+    return actual_candidates
 
 for tweet in text:
     for expr in win_exprs:
@@ -90,4 +126,4 @@ for tweet in text:
         if var:
             winners_from_cats_noms(gold_categories, gold_nominees, tweet, var)
 
-print(win_candidates)
+print(total_votes(win_candidates, 1))
