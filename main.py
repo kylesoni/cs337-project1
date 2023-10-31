@@ -2,10 +2,15 @@ import pandas as pd
 import re
 from ftfy import fix_text
 from unidecode import unidecode
+import json
+import imdb
+from nltk import edit_distance
+import numpy as np
 
 # Import data from json file
 df = pd.read_json('data\\gg2013.json')
 
+ia = imdb.Cinemagoer()
 # Import list of actors and movies from IMDB (uncomment when actually used so it doesn't take forever to run)
 # actor_df = pd.read_csv('data\\name.basics.tsv', sep='\t')
 # movie_df = pd.read_csv('data\\title.basics.tsv', sep='\t')
@@ -72,37 +77,60 @@ test = []
 #print(category_candidates[1])
 #print(test[1][0][0])
 
-gold_categories = ["Best Screenplay - Motion Picture", 
-                   "Best Director - Motion Picture", 
-                   "Best Performance by an Actress in a Television Series - Comedy or Musical", 
-                   "Best Foreign Language Film",
-                   "Best Performance by an Actor in a Supporting Role in a Motion Picture",
-                   "Best Performance by an Actress in a Supporting Role in a Series, Mini-Series or Motion Picture Made for Television",
-                   "Best Motion Picture - Comedy or Musical",
-                   "Best Actress in a Motion Picture - Comedy or Musical",
-                   "Best Actress in a Motion Picture - Drama"]
-gold_nominees = [["Zero Dark Thirty", "Lincoln", "Silver Linings Playbook", "Argo", "Django Unchained"], 
-                 ["Ben Affleck", "Kathryn Bigelow", "Ang Lee", "Steven Spielberg", "Quentin Tarantino"],
-                 ["Zooey Deschanel", "Tina fey", "Julia Louis-Dreyfus", "Amy Poehler", "Lena Dunham"],
-                 ["The Intouchables", "Kon Tiki", "A Royal Affair", "Rust and Bone", "Amour"],
-                 ["Alan Arkin", "Leonardo Dicaprio", "Philip Seymour Hoffman", "Tommy Lee Jones", "Christoph Waltz"],
-                 ["Hayden Panettiere", "Archie Panjabi", "Sarah Paulson", "Sofia Vergara", "Maggie Smith"],
-                 ["The Best Exotic Marigold Hotel", "Moonrise Kingdom", "Salmon Fishing in the Yemen", "Silver Linings Playbook", "Les Miserables"],
-                 ["Emily Blunt", "Judi Dench", "Maggie Smith", "Meryl Streep", "Jennifer Lawrence"],
-                 ["Jessica Chastain"]]
+answers_file = open('data\\gg2013answers.json')
+answers = json.load(answers_file)
+gold_categories = answers['award_data'].keys()
+gold_nominees = []
+for val in answers['award_data'].values():
+    gold_nominees.append(val['nominees'])
 win_candidates = [[] for i in range(len(gold_categories))]
 
 def winners_from_cats_noms(categories, nominees, tweet, filt_expr):
-    for cat_i, cat in enumerate(categories):
-        if re.search(cat, tweet):
-                before = filt_expr[0][0].rsplit(None, 0)
-                for nom in nominees[cat_i]:
-                     if re.search(nom, str(before[0])):
-                          win_candidates[cat_i].append((nom, 10))
-                after = filt_expr[0][0].rsplit(None, 0)
-                for nom in nominees[cat_i]:
-                     if re.search(nom, str(after[0])):
-                          win_candidates[cat_i].append((nom, 10))
+    before = filt_expr[0][0].rsplit(None, filt_expr[0][0].count(' '))
+    after = filt_expr[0][2].rsplit(None, filt_expr[0][0].count(' '))
+    after = [x.lower() for x in after]
+    poss_wins = []
+
+    # Construct list of possible names
+    if len(before) > 3:
+        poss_wins.append(before[-2] + " " + before[-1])
+        poss_wins.append(before[-3] + " " + before[-2] + " " + before[-1])
+    elif len(before) > 2:
+        poss_wins.append(before[-2] + " " + before[-1])
+
+    # Try to best match category found to the gold standard list
+    category_index = -1
+    weights = [0 for x in range(len(gold_categories))]
+    for i, gold_cat in enumerate(categories):
+        for expr in after:
+            if expr in gold_cat:
+                weights[i] += 1
+    if max(weights) > 1:
+        category_index = np.argmax(weights)
+        if type(category_index) is list:
+            category_index = category_index[0]
+
+    if category_index >= 0:
+        for can in poss_wins:
+            new = imdb_check_name(can, win_candidates[category_index])
+            if new != 0:
+                print("made it this far")
+                win_candidates[category_index].append(new)
+    #print(win_candidates)
+
+def imdb_check_name(name, candidate_list):
+    for i in range(len(candidate_list)):
+        if edit_distance(name, candidate_list[i][0]) < 2:
+            candidate_list[i] = (candidate_list[i][0], candidate_list[i][1] + 10)
+            return 0
+    try:
+            person = ia.search_person(name)
+    except:
+        pass
+    else:
+        if len(person) > 0 and edit_distance(name, person[0]['name']) < 4:
+            return (name, 10)
+    return 0    
 
 def total_votes(candidate_list, max_winner):
     actual_candidates = [[] for x in range(len(candidate_list))]
