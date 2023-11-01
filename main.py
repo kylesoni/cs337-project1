@@ -115,7 +115,7 @@ def get_hosts():
 
     hosts_candidates[0] = Counter(hosts_candidates[0])
     hosts_ordered = hosts_candidates[0].most_common(len(hosts_candidates[0]))
-    print(hosts_ordered)
+    #print(hosts_ordered)
     max_count = hosts_ordered[0][1]
     hosts_candidates = []
     for i in range(len(hosts_ordered)):
@@ -123,18 +123,121 @@ def get_hosts():
             hosts_candidates.append(hosts_ordered[i][0])
         else:
             break
-    print(hosts_candidates)
+    return hosts_candidates
 
 def get_award_names():
     award_names_candidates = []
     return award_names_candidates
 
 def get_presenters_gold():
-    presenter_candidates = [[] for i in range(len(gold_award_names))]
+    presenter_candidates = [{} for i in range(len(gold_award_names))]
+    presenter_pattern = '(presenters?|Presenters?|PRESENTERS?|presented by|present(ed|s|ing))'
+    tweets_of_interest = df.text[df.text.str.contains(presenter_pattern)].values.tolist()
+    for tweet in tweets_of_interest:
+        max_count = 0
+        best_i = -1
+        best_award = ""
+        for i, award in enumerate(gold_award_names):
+            count = 0
+            for match in key_award_words[award]:
+                if match.lower() in tweet.lower():
+                    count += 1
+            # Move on to next category if not enough matches were found in the tweet
+            if (count < 2):
+                continue
+            # Find the best match for the category, and prefer shorter categories if there's a tie
+            if (count > max_count):
+                max_count = count
+                best_i = i
+                best_award = award
+            elif (count == max_count):
+                if (len(award.split()) < len(best_award.split())):
+                    max_count = count
+                    best_i = i
+                    best_award = award
+
+        if best_i == -1:
+            continue
+
+        # Reset the names because I'm lazy
+        i = best_i
+        award = best_award
+
+        find_name(tweet, presenter_candidates[i])
+    
+    #print(presenter_candidates)
+    for i in range(len(presenter_candidates)):
+        presenter_candidates[i] = Counter(presenter_candidates[i])
+        if len(presenter_candidates[i]) > 0:
+            presenter_candidates[i] = presenter_candidates[i].most_common(1)[0][0]
+        else:
+            presenter_candidates[i] = "not found"
+    #print(presenter_candidates)
     return presenter_candidates
 
 def get_nominees_gold():
-    nominees_candidates = [[] for i in range(len(gold_award_names))]
+    nominees_candidates = [{} for i in range(len(gold_award_names))]
+    nominee_pattern = '[?!(pretend|fake|was not|is not)](nominees?|Nominees?|NOMINEES?|nominated?)|(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
+    tweets_of_interest = df.text[df.text.str.contains(nominee_pattern)].values.tolist()
+    for tweet in tweets_of_interest:
+        # Figure out if tweet is relevant to award category we are looking at
+        max_count = 0
+        best_i = -1
+        best_award = ""
+        for i, award in enumerate(gold_award_names):
+            count = 0
+            for match in key_award_words[award]:
+                if match.lower() in tweet.lower():
+                    count += 1
+            # Move on to next category if not enough matches were found in the tweet
+            if (count < 1):
+                continue
+            # Find the best match for the category, and prefer shorter categories if there's a tie
+            if (count > max_count):
+                max_count = count
+                best_i = i
+                best_award = award
+            elif (count == max_count):
+                if (len(award.split()) < len(best_award.split())):
+                    max_count = count
+                    best_i = i
+                    best_award = award
+
+        if best_i == -1:
+            continue
+
+        # Reset the names because I'm lazy
+        i = best_i
+        award = best_award
+        # Determine if we should look for a person or movie titles:
+        aw_type = ""
+        name_types = ["director", "actor", "actress", "cecil", "demille"]
+        for n_t in name_types:
+            if n_t in award:
+                aw_type = "person"
+                break
+        
+        if (aw_type == "person"):
+            find_name(tweet, nominees_candidates[i])
+
+    #print(nominees_candidates)
+    for i in range(len(nominees_candidates)):
+        nominees_candidates[i] = Counter(nominees_candidates[i])
+        noms_ordered = nominees_candidates[i].most_common(len(nominees_candidates[i]))
+        if len(nominees_candidates[i]) > 0:
+            nominees_candidates[i] = [noms_ordered[0][0]]
+            too_far = 1
+            if len(noms_ordered) > 1:
+                max_count = noms_ordered[1][1]
+            else:
+                max_count = noms_ordered[0][1]
+            for j in range(1, len(noms_ordered)):
+                if too_far < 4 or (too_far < 5 and noms_ordered[j][1] > max_count * 0.1):
+                    nominees_candidates[i].append(noms_ordered[j][0])
+                    too_far += 1
+        else:
+            nominees_candidates[i] = "not found"
+    #print(nominees_candidates)
     return nominees_candidates
 
 def get_winners_gold():
@@ -153,7 +256,7 @@ def get_winners_gold():
                 if match.lower() in tweet.lower():
                     count += 1
             # Move on to next category if not enough matches were found in the tweet
-            if (count < 2):
+            if (count < 1):
                 continue
             # Find the best match for the category, and prefer shorter categories if there's a tie
             if (count > max_count):
@@ -189,7 +292,8 @@ def get_winners_gold():
             win_candidates[i] = win_candidates[i].most_common(1)[0][0]
         else:
             win_candidates[i] = "not found"
-    print(win_candidates)
+    #print(win_candidates)
+    return win_candidates
 
 
 def find_name(tweet, current_dict):
@@ -225,12 +329,11 @@ def get_keywords_from_awards(award_names):
                 else:
                     key_award_words[award] = [str(tok)]
 
-get_hosts()
 get_keywords_from_awards(gold_award_names)
-get_winners_gold()
+#get_winners_gold()
 #print(key_award_words)
 
-def output(hosts, award_names, presenters, nominees, winners):
+def record_data(hosts, award_names, presenters, nominees, winners, modification):
     output = "Hosts:"
     for h in hosts:
         output += h + ", "
@@ -250,10 +353,12 @@ def output(hosts, award_names, presenters, nominees, winners):
     json_output["award_data"] = {}
     for i in range(len(award_names)):
         json_output["award_data"][award_names[i]] = {"nominees": nominees[i], "presenters": presenters[i], "winner": winners[i]}
-    with open(json_file_path.replace(".json","") + "our_answers.json", 'w') as data:
+    with open(json_file_path.replace(".json","") + "our_answers" + modification + ".json", 'w') as data:
         json.dump(json_output, data)
 
     return output
+
+print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(), get_nominees_gold(), get_winners_gold(), "gold"))
 
 """
 def old_get_winners():
