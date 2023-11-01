@@ -50,7 +50,8 @@ for name in imdb_fields[1:len(imdb_fields)-1]:
         else:
             imdb_names.append(name[1])
 
-print(imdb_names)
+# Keep track of tweets we've already parsed
+parsed_tweets = {}
 
 # Get only the body of the tweets (ignore username, etc.) and clean it up
 text = df['text']
@@ -97,7 +98,7 @@ def get_nominees_gold():
     return nominees_candidates
 
 def get_winners_gold():
-    win_candidates = [[] for i in range(len(gold_award_names))]
+    win_candidates = [{} for i in range(len(gold_award_names))]
     # Filter tweets down to winners only
     win_pattern = '(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)' 
     blah = '(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
@@ -121,16 +122,26 @@ def get_winners_gold():
                     aw_type = "person"
                     break
             
-            raw_candidates = {}
             if (aw_type == "person"):
-                uncleaned_dict = 0
-            else:
-                uncleaned_dict = 0
-                
-def find_name(tweet):
-    candidates = {}
-    name_pattern = re.compile('[A-Z][a-z]*\s[\w]+')
+                find_name(tweet, win_candidates[i])
+            print(win_candidates)
 
+
+def find_name(tweet, current_dict):
+    name_pattern = re.compile('[A-Z][a-z]*\s[\w]+')
+    if tweet not in parsed_tweets:
+        parsed_tweets[tweet] = spacy_model(tweet).ents
+    for ent in parsed_tweets[tweet]:
+        stripped_ent = ent.text.strip()
+        if name_pattern.match(stripped_ent) is None:
+            continue
+        if ent.label_ == "PERSON" and stripped_ent in imdb_names:
+            if stripped_ent in current_dict:
+                current_dict[stripped_ent] += 1
+            else:
+                current_dict[stripped_ent] = 1
+
+#find_name("Best Supporting Actor in a Movie goes to Christoph Waltz for Django Unchained. Haven't seen it yet. #GoldenGlobes")
 
 def get_keywords_from_awards(award_names):
     global key_award_words
@@ -150,8 +161,8 @@ def get_keywords_from_awards(award_names):
                     key_award_words[award] = [str(tok)]
 
 
-#get_keywords_from_awards(gold_award_names)
-#get_winners_gold()
+get_keywords_from_awards(gold_award_names)
+get_winners_gold()
 #print(key_award_words['best performance by an actress in a television series - comedy or musical'])
 
 """
