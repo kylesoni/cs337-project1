@@ -28,8 +28,8 @@ spacy_model = spacy.load("en_core_web_sm")
 ia = imdb.Cinemagoer()
 
 # Get subset of imdb data based on year of awards
-urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
-urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
+#urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
+#urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
 imdb_names = gzip.open('data\\name.basics.tsv.gz')
 content = str(imdb_names.read())
 imdb_lines = content.split('\\n')
@@ -103,6 +103,27 @@ presenter_exprs = ['(presenters?|Presenters?|PRESENTERS?|presented by|present(ed
 win_candidates = []
 win_count = -1
 
+def get_best_dressed():
+    best_dressed_candidates = {}
+    best_dressed_pattern = '(Best Dressed|best dressed|gorgeous|beautiful|pretty|stunning|amazing|handsome|favorite)'
+    fashion_dict = ['dress', 'skirt', 'tux', 'tuxedo', 'suit']
+    tweets_of_interest = df.text[df.text.str.contains(best_dressed_pattern)].values.tolist()
+    for tweet in tweets_of_interest:
+        for fash in fashion_dict:
+            if fash in tweet:
+                find_name(tweet, best_dressed_candidates)
+                break
+    best_dressed_candidates = Counter(best_dressed_candidates)
+    best_dressed_ordered = best_dressed_candidates.most_common(len(best_dressed_candidates))
+    #print(hosts_ordered)
+    max_count = best_dressed_ordered[0][1]
+    best_dressed_candidates = []
+    for i in range(len(best_dressed_ordered)):
+        if best_dressed_ordered[i][1] > max_count * 0.33:
+            best_dressed_candidates.append(best_dressed_ordered[i][0])
+        else:
+            break
+    return best_dressed_candidates
 
 def get_hosts():
     hosts_candidates = [{}]
@@ -226,6 +247,9 @@ def get_nominees_gold():
         
         if (aw_type == "person"):
             find_name(tweet, nominees_candidates[i])
+        else:
+            find_title(tweet, nominees_candidates[i], 'is nominated', "before")
+            find_title(tweet, nominees_candidates[i], '(nominees for|nominees of)', "after")
 
     #print(nominees_candidates)
     for i in range(len(nominees_candidates)):
@@ -298,14 +322,14 @@ def get_winners_gold():
             find_title(tweet, win_candidates[i], before_win_expr, "before")
             find_title(tweet, win_candidates[i], after_win_expr, "after")
 
-    print(win_candidates)
+    #print(win_candidates)
     for i in range(len(win_candidates)):
         win_candidates[i] = Counter(win_candidates[i])
         if len(win_candidates[i]) > 0:
             win_candidates[i] = win_candidates[i].most_common(1)[0][0]
         else:
             win_candidates[i] = "not found"
-    print(win_candidates)
+    #print(win_candidates)
     return win_candidates
 
 
@@ -347,7 +371,7 @@ def find_title(tweet, current_dict, split_expr, tag):
                     current_dict[match] = 1
     if tag == "after":
         var = re.findall(r"(.+) " + split_expr + " (.+)", tweet)
-        if var:
+        if var and len(var[0]) > 3:
             after = var[0][2].rsplit(None, var[0][0].count(' '))
             for i in range(len(after)):
                 candidate = after[0]
@@ -385,8 +409,10 @@ def get_keywords_from_awards(award_names):
                     key_award_words[award] = [str(tok)]
 
 get_keywords_from_awards(gold_award_names)
-get_winners_gold()
+#get_winners_gold()
 #print(key_award_words)
+#get_nominees_gold()
+print(get_best_dressed())
 
 def record_data(hosts, award_names, presenters, nominees, winners, modification):
     output = "Hosts:"
@@ -413,4 +439,5 @@ def record_data(hosts, award_names, presenters, nominees, winners, modification)
 
     return output
 
+get_keywords_from_awards(gold_award_names)
 #print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(), get_nominees_gold(), get_winners_gold(), "gold"))
