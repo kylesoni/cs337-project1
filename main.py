@@ -67,15 +67,47 @@ def get_nominees_gold():
 
 def get_winners_gold():
     win_candidates = [[] for i in range(len(gold_award_names))]
-    win_pattern = '(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
+    # Filter tweets down to winners only
+    win_pattern = '(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)' 
+    blah = '(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
     tweets_of_interest = df.text[df.text.str.contains(win_pattern)].values.tolist()
     for tweet in tweets_of_interest:
+        # Figure out if tweet is relevant to award category we are looking at
         for i, award in enumerate(gold_award_names):
-            pass
-    
+            count = 0
+            for match in key_award_words[award]:
+                if match.lower() in tweet.lower():
+                    count += 1
+            # Move on to next category if not enough matches were found in the tweet
+            if count < 4:
+                continue
+            else:
+                print(tweet)
+                print(award)
+                return
 
+                
+def get_keywords_from_awards(award_names):
+    global key_award_words
+    key_award_words = {}
+    for award in award_names:
+        for tok in spacy_model(award):
+            if tok.pos_ == "NOUN" or tok.pos_ == "ADJ":
+                if award in key_award_words:
+                    key_award_words[award].append(str(tok))
+                else:
+                    key_award_words[award] = [str(tok)]
+        if award not in key_award_words:
+            for tok in spacy_model(award):
+                if award in key_award_words:
+                    key_award_words[award].append(str(tok))
+                else:
+                    key_award_words[award] = [str(tok)]
+
+
+get_keywords_from_awards(gold_award_names)
 get_winners_gold()
-    
+#print(key_award_words['best performance by an actress in a television series - comedy or musical'])
 
 """
 def old_get_winners():
