@@ -18,7 +18,7 @@ master_year = 2013
 json_file_path = 'data\\gg2013.json'
 df = pd.read_json(json_file_path)
 
-# Get IMDB data
+# Get answers data
 answers_file = open('data\\gg2013answers.json')
 answers = json.load(answers_file)
 
@@ -37,21 +37,21 @@ imdb_fields = []
 for line in imdb_lines:
     imdb_fields.append(line.split('\\t'))
 
-imdb_names = []
+imdb_names = {}
 
 for name in imdb_fields[1:len(imdb_fields)-1]:
     # Determine if the person was active during the award show
     if (name[2] == '\\\\N'):
         continue
     if (name[3] == '\\\\N' and int(name[2]) < master_year - 5):
-        imdb_names.append(name[1])
+        imdb_names[name[1]] = 1
     elif (name[3] == '\\\\N'):
         continue
     else:
         if (int(name[3]) < int(name[2]) or int(name[3]) < master_year - 5 or int(name[2]) > master_year + 5):
             pass
         else:
-            imdb_names.append(name[1])
+            imdb_names[name[1]] = 1
 
 imdb_titles = gzip.open('data\\title.basics.tsv.gz')
 content = str(imdb_titles.read())
@@ -60,7 +60,7 @@ imdb_fields = []
 for line in imdb_lines:
     imdb_fields.append(line.split('\\t'))
 
-imdb_titles = []
+imdb_titles = {}
 
 for name in imdb_fields[1:len(imdb_fields)-1]:
     if (name[1] not in ["movie", "short", "tvseries"]):
@@ -69,9 +69,9 @@ for name in imdb_fields[1:len(imdb_fields)-1]:
         continue
     if (name[6] == '\\\\N'):
         if (int(name[5]) > master_year - 5):
-            imdb_titles.append(name[2])
+            imdb_titles[name[2]] = 1
     elif (int(name[6]) < master_year + 5 and int(name[5]) > master_year - 5):
-        imdb_titles.append(name[2])   
+        imdb_titles[name[2]] = 1  
 
 # Keep track of tweets we've already parsed
 parsed_tweets = {}
@@ -168,10 +168,17 @@ def get_presenters_gold():
     #print(presenter_candidates)
     for i in range(len(presenter_candidates)):
         presenter_candidates[i] = Counter(presenter_candidates[i])
+        pres_ordered = presenter_candidates[i].most_common(len(presenter_candidates[i]))
         if len(presenter_candidates[i]) > 0:
-            presenter_candidates[i] = presenter_candidates[i].most_common(1)[0][0]
+            presenter_candidates[i] = [pres_ordered[0][0]]
+            too_far = 1
+            max_count = pres_ordered[0][1]
+            for j in range(1, len(pres_ordered)):
+                if too_far < 4 and pres_ordered[j][1] > max_count * 0.1:
+                    presenter_candidates[i].append(pres_ordered[j][0])
+                    too_far += 1
         else:
-            presenter_candidates[i] = "not found"
+            presenter_candidates[i] = ["not found"]
     #print(presenter_candidates)
     return presenter_candidates
 
@@ -236,7 +243,7 @@ def get_nominees_gold():
                     nominees_candidates[i].append(noms_ordered[j][0])
                     too_far += 1
         else:
-            nominees_candidates[i] = "not found"
+            nominees_candidates[i] = ["not found"]
     #print(nominees_candidates)
     return nominees_candidates
 
@@ -282,17 +289,23 @@ def get_winners_gold():
             if n_t in award:
                 aw_type = "person"
                 break
-        
+
+        before_win_expr = '(wins|Wins|WINS|receiv(es|ed)|won)'
+        after_win_expr = '(goes to| Goes To| GOES TO)'
         if (aw_type == "person"):
             find_name(tweet, win_candidates[i])
+        else:
+            find_title(tweet, win_candidates[i], before_win_expr, "before")
+            find_title(tweet, win_candidates[i], after_win_expr, "after")
 
+    print(win_candidates)
     for i in range(len(win_candidates)):
         win_candidates[i] = Counter(win_candidates[i])
         if len(win_candidates[i]) > 0:
             win_candidates[i] = win_candidates[i].most_common(1)[0][0]
         else:
             win_candidates[i] = "not found"
-    #print(win_candidates)
+    print(win_candidates)
     return win_candidates
 
 
@@ -309,6 +322,48 @@ def find_name(tweet, current_dict):
                 current_dict[stripped_ent] += 1
             else:
                 current_dict[stripped_ent] = 1
+
+def find_title(tweet, current_dict, split_expr, tag):
+    poss_matches = []
+    if tag == "before":
+        var = re.findall(r"(.+) " + split_expr + " (.+)", tweet)
+        if var:
+            before = var[0][0].rsplit(None, var[0][0].count(' '))
+            for i in range(len(before)):
+                candidate = before[-1]
+                if i == 0:
+                    poss_matches.append(before[-1])
+                else:
+                    for j in range(i):
+                        if "#" in before[-2 - j]:
+                            break
+                        candidate = before[-2 - j] + " " + candidate
+                        poss_matches.append(candidate)
+        for match in poss_matches:
+            if match in imdb_titles:
+                if match in current_dict:
+                    current_dict[match] += 1
+                else:
+                    current_dict[match] = 1
+    if tag == "after":
+        var = re.findall(r"(.+) " + split_expr + " (.+)", tweet)
+        if var:
+            after = var[0][2].rsplit(None, var[0][0].count(' '))
+            for i in range(len(after)):
+                candidate = after[0]
+                if i == 0:
+                    poss_matches.append(after[0])
+                else:
+                    for j in range(i):
+                        candidate =  candidate + " " + after[1 + j]
+                    poss_matches.append(candidate)
+        for match in poss_matches:
+            if match in imdb_titles:
+                if match in current_dict:
+                    current_dict[match] += 1
+                else:
+                    current_dict[match] = 1
+
 
 #find_name("Best Supporting Actor in a Movie goes to Christoph Waltz for Django Unchained. Haven't seen it yet. #GoldenGlobes")
 
@@ -330,7 +385,7 @@ def get_keywords_from_awards(award_names):
                     key_award_words[award] = [str(tok)]
 
 get_keywords_from_awards(gold_award_names)
-#get_winners_gold()
+get_winners_gold()
 #print(key_award_words)
 
 def record_data(hosts, award_names, presenters, nominees, winners, modification):
@@ -358,126 +413,4 @@ def record_data(hosts, award_names, presenters, nominees, winners, modification)
 
     return output
 
-print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(), get_nominees_gold(), get_winners_gold(), "gold"))
-
-"""
-def old_get_winners():
-    # Regular Expressions for winners
-    before_win_exprs_search = ['(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)'] 
-    after_win_exprs_search = ['(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)']
-
-    before_win_exprs = ['(wins|Wins|WINS|receiv(es|ed)|won)'] 
-    after_win_exprs = ['(goes to| Goes To| GOES TO)']
-    win_candidates = [[] for i in range(len(gold_categories))]
-    before = filt_expr[0][0].rsplit(None, filt_expr[0][0].count(' '))
-    after = filt_expr[0][2].rsplit(None, filt_expr[0][0].count(' '))
-    poss_wins = []
-    for tweet in text:
-        for i, expr in enumerate(before_win_exprs_search):
-            if re.search(expr, tweet):
-                var = re.findall(r"(.+) " + before_win_exprs[i] + " (.+)", tweet)
-                if var:
-                    winners_from_cats_noms(gold_categories, var, "before")
-        for i, expr in enumerate(after_win_exprs):
-            if re.search(expr, tweet):
-                var = re.findall(r"(.+) " + after_win_exprs[i] + " (.+)", tweet)
-                if var:
-                    winners_from_cats_noms(gold_categories, var, "after")
-    if order == "before":
-        candidate_loc = before
-        award_name_loc = after
-        # Construct list of possible names for before expressions
-        for i in range(len(candidate_loc)):
-            candidate = candidate_loc[-1]
-            if i == 0:
-                poss_wins.append(candidate_loc[-1])
-            else:
-                for j in range(i):
-                    candidate = candidate_loc[-2 - j] + " " + candidate
-                poss_wins.append(candidate)
-    else:
-        candidate_loc = after
-        award_name_loc = before
-        # Construct list of possible names for after expressions
-        for i in range(len(candidate_loc)):
-            candidate = candidate_loc[0]
-            if i == 0:
-                poss_wins.append(candidate_loc[0])
-            else:
-                for j in range(i):
-                    candidate =  candidate + " " + candidate_loc[1 + j]
-                poss_wins.append(candidate)
-
-    #print(poss_wins)
-    award_name_loc = [x.lower() for x in award_name_loc]
-
-    # Try to best match category found to the gold standard list
-    category_index = -1
-    weights = [0 for x in range(len(gold_categories))]
-    for i, gold_cat in enumerate(categories):
-        for expr in award_name_loc:
-            if expr in gold_cat:
-                weights[i] += 1
-    if max(weights) > 1:
-        category_index = np.argmax(weights)
-        if type(category_index) is list:
-            category_index = category_index[0]
-
-    if category_index >= 0:
-        for can in poss_wins:
-            new = imdb_check_name(can, win_candidates[category_index])
-            if new != 0:
-                win_candidates[category_index].append(new)
-                print(win_candidates)
-            else:
-                new_movie = imdb_check_title(can, win_candidates[category_index])
-                if new_movie !=0:
-                    win_candidates[category_index].append(new_movie)
-                    #print(win_candidates)
-    return win_candidates
-
-def imdb_check_name(name, candidate_list):
-    for i in range(len(candidate_list)):
-        if edit_distance(name, candidate_list[i][0]) < 2:
-            candidate_list[i] = (candidate_list[i][0], candidate_list[i][1] + 10)
-            return 0
-    try:
-            person = ia.search_person(name)
-    except:
-        pass
-    else:
-        if len(person) > 0 and edit_distance(name, person[0]['name']) < 4:
-            return (name, 10)
-    return 0
-
-def imdb_check_title(name, candidate_list):
-    for i in range(len(candidate_list)):
-        if edit_distance(name, candidate_list[i][0]) < 2:
-            candidate_list[i] = (candidate_list[i][0], candidate_list[i][1] + 10)
-            return 0
-    try:
-            title = ia.search_movie(name)
-    except:
-        pass
-    else:
-        if len(title) > 0 and edit_distance(name, title[0]['title']) < 4:
-            return (name, 10)
-    return 0
-
-def total_votes(candidate_list, max_winner):
-    actual_candidates = [[] for x in range(len(candidate_list))]
-    weights = [[] for x in range(len(candidate_list))]
-    for i, category in enumerate(candidate_list):
-        for thing in category:
-            if thing[0] not in actual_candidates[i]:
-                actual_candidates[i].append(thing[0])
-                weights[i].append(thing[1])
-            else:
-                weights[i][actual_candidates[i].index(thing[0])] += thing[1]
-        actual_candidates[i] = [x for _, x in sorted(zip(weights[i], actual_candidates[i]), key=lambda pair: pair[0], reverse=True)]
-    for i in range(len(actual_candidates)):
-        if len(actual_candidates[i]) > 0:
-            actual_candidates[i] = actual_candidates[i][0]
-    return actual_candidates
-
-print(total_votes(win_candidates, 1))"""
+#print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(), get_nominees_gold(), get_winners_gold(), "gold"))
