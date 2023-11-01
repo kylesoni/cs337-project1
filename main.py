@@ -28,8 +28,8 @@ spacy_model = spacy.load("en_core_web_sm")
 ia = imdb.Cinemagoer()
 
 # Get subset of imdb data based on year of awards
-#urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
-#urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
+urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
+urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
 imdb_names = gzip.open('data\\name.basics.tsv.gz')
 content = str(imdb_names.read())
 imdb_lines = content.split('\\n')
@@ -339,7 +339,7 @@ def record_data(hosts, award_names, presenters, nominees, winners, modification)
         output += h + ", "
     output = output[:-2] + "\n\n"
     for i in range(len(award_names)):
-        output += "Award " + award_names[i] + "\n"
+        output += "Award: " + award_names[i] + "\n"
         output += "Presenters: "
         for presenter in presenters[i]:
             output += presenter + ", "
