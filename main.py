@@ -6,14 +6,15 @@ import json
 import imdb
 from nltk import edit_distance
 import numpy as np
+import spacy
+
+# Get syntactic parser
+spacy_model = spacy.load("en_core_web_sm")
 
 # Import data from json file
 df = pd.read_json('data\\gg2013.json')
 
 ia = imdb.Cinemagoer()
-# Import list of actors and movies from IMDB (uncomment when actually used so it doesn't take forever to run)
-# actor_df = pd.read_csv('data\\name.basics.tsv', sep='\t')
-# movie_df = pd.read_csv('data\\title.basics.tsv', sep='\t')
 
 # actors = actor_df['primaryName']
 # print(actors)
@@ -30,14 +31,10 @@ for tweet in text:
 # Get "Gold" Award Names from the answer file
 answers_file = open('data\\gg2013answers.json')
 answers = json.load(answers_file)
-gold_categories = answers['award_data'].keys()
+gold_award_names = answers['award_data'].keys()
 gold_nominees = []
 for val in answers['award_data'].values():
     gold_nominees.append(val['nominees'])
-
-# Regular Expressions for winners
-before_win_exprs = ['(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)'] 
-after_win_exprs = ['(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)']
 
 # Regular Expressiosn for hosts
 host_exprs = ['(hosts?|Hosts?|HOSTS?|hosted by)[?!(will|should)]']
@@ -51,12 +48,58 @@ presenter_exprs = ['(presenters?|Presenters?|PRESENTERS?|presented by|present(ed
 win_candidates = []
 win_count = -1
 
-win_candidates = [[] for i in range(len(gold_categories))]
 
-def winners_from_cats_noms(categories, filt_expr, order):
+def get_hosts():
+    hosts_candidates = []
+    return hosts_candidates
+
+def get_award_names():
+    award_names_candidates = []
+    return award_names_candidates
+
+def get_presenters_gold():
+    presenter_candidates = [[] for i in range(len(gold_award_names))]
+    return presenter_candidates
+
+def get_nominees_gold():
+    nominees_candidates = [[] for i in range(len(gold_award_names))]
+    return nominees_candidates
+
+def get_winners_gold():
+    win_candidates = [[] for i in range(len(gold_award_names))]
+    win_pattern = '(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
+    tweets_of_interest = df.text[df.text.str.contains(win_pattern)].values.tolist()
+    for tweet in tweets_of_interest:
+        for i, award in enumerate(gold_award_names):
+            pass
+    
+
+get_winners_gold()
+    
+
+"""
+def old_get_winners():
+    # Regular Expressions for winners
+    before_win_exprs_search = ['(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)'] 
+    after_win_exprs_search = ['(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)']
+
+    before_win_exprs = ['(wins|Wins|WINS|receiv(es|ed)|won)'] 
+    after_win_exprs = ['(goes to| Goes To| GOES TO)']
+    win_candidates = [[] for i in range(len(gold_categories))]
     before = filt_expr[0][0].rsplit(None, filt_expr[0][0].count(' '))
     after = filt_expr[0][2].rsplit(None, filt_expr[0][0].count(' '))
     poss_wins = []
+    for tweet in text:
+        for i, expr in enumerate(before_win_exprs_search):
+            if re.search(expr, tweet):
+                var = re.findall(r"(.+) " + before_win_exprs[i] + " (.+)", tweet)
+                if var:
+                    winners_from_cats_noms(gold_categories, var, "before")
+        for i, expr in enumerate(after_win_exprs):
+            if re.search(expr, tweet):
+                var = re.findall(r"(.+) " + after_win_exprs[i] + " (.+)", tweet)
+                if var:
+                    winners_from_cats_noms(gold_categories, var, "after")
     if order == "before":
         candidate_loc = before
         award_name_loc = after
@@ -81,7 +124,7 @@ def winners_from_cats_noms(categories, filt_expr, order):
                 for j in range(i):
                     candidate =  candidate + " " + candidate_loc[1 + j]
                 poss_wins.append(candidate)
-    
+
     #print(poss_wins)
     award_name_loc = [x.lower() for x in award_name_loc]
 
@@ -108,6 +151,7 @@ def winners_from_cats_noms(categories, filt_expr, order):
                 if new_movie !=0:
                     win_candidates[category_index].append(new_movie)
                     #print(win_candidates)
+    return win_candidates
 
 def imdb_check_name(name, candidate_list):
     for i in range(len(candidate_list)):
@@ -153,14 +197,4 @@ def total_votes(candidate_list, max_winner):
             actual_candidates[i] = actual_candidates[i][0]
     return actual_candidates
 
-for tweet in text:
-    for expr in before_win_exprs:
-        var = re.findall(r"(.+) " + expr + " (.+)", tweet)
-        if var:
-            winners_from_cats_noms(gold_categories, var, "before")
-    for expr in after_win_exprs:
-        var = re.findall(r"(.+) " + expr + " (.+)", tweet)
-        if var:
-            winners_from_cats_noms(gold_categories, var, "after")
-
-print(total_votes(win_candidates, 1))
+print(total_votes(win_candidates, 1))"""
