@@ -9,12 +9,14 @@ import numpy as np
 import spacy
 import gzip
 import urllib
+from collections import Counter
 
 # Set year of awards
 master_year = 2013
 
 # Import data from json file
-df = pd.read_json('data\\gg2013.json')
+json_file_path = 'data\\gg2013.json'
+df = pd.read_json(json_file_path)
 
 # Get IMDB data
 answers_file = open('data\\gg2013answers.json')
@@ -27,6 +29,7 @@ ia = imdb.Cinemagoer()
 
 # Get subset of imdb data based on year of awards
 #urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
+#urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
 imdb_names = gzip.open('data\\name.basics.tsv.gz')
 content = str(imdb_names.read())
 imdb_lines = content.split('\\n')
@@ -49,6 +52,26 @@ for name in imdb_fields[1:len(imdb_fields)-1]:
             pass
         else:
             imdb_names.append(name[1])
+
+imdb_titles = gzip.open('data\\title.basics.tsv.gz')
+content = str(imdb_titles.read())
+imdb_lines = content.split('\\n')
+imdb_fields = []
+for line in imdb_lines:
+    imdb_fields.append(line.split('\\t'))
+
+imdb_titles = []
+
+for name in imdb_fields[1:len(imdb_fields)-1]:
+    if (name[1] not in ["movie", "short", "tvseries"]):
+        continue
+    if (name[5] == '\\\\N'):
+        continue
+    if (name[6] == '\\\\N'):
+        if (int(name[5]) > master_year - 5):
+            imdb_titles.append(name[2])
+    elif (int(name[6]) < master_year + 5 and int(name[5]) > master_year - 5):
+        imdb_titles.append(name[2])   
 
 # Keep track of tweets we've already parsed
 parsed_tweets = {}
@@ -82,8 +105,25 @@ win_count = -1
 
 
 def get_hosts():
+    hosts_candidates = [{}]
+    host_pattern = '(hosts?|Hosts?|HOSTS?|hosted by)[?!(will|should)]'
+    tweets_of_interest = df.text[df.text.str.contains(host_pattern)].values.tolist()
+    for tweet in tweets_of_interest:
+        if 'next year' in tweet:
+            continue
+        find_name(tweet, hosts_candidates[0])
+
+    hosts_candidates[0] = Counter(hosts_candidates[0])
+    hosts_ordered = hosts_candidates[0].most_common(len(hosts_candidates[0]))
+    print(hosts_ordered)
+    max_count = hosts_ordered[0][1]
     hosts_candidates = []
-    return hosts_candidates
+    for i in range(len(hosts_ordered)):
+        if hosts_ordered[i][1] > max_count * 0.5:
+            hosts_candidates.append(hosts_ordered[i][0])
+        else:
+            break
+    print(hosts_candidates)
 
 def get_award_names():
     award_names_candidates = []
@@ -100,31 +140,56 @@ def get_nominees_gold():
 def get_winners_gold():
     win_candidates = [{} for i in range(len(gold_award_names))]
     # Filter tweets down to winners only
-    win_pattern = '(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)' 
-    blah = '(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
+    win_pattern = '(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
     tweets_of_interest = df.text[df.text.str.contains(win_pattern)].values.tolist()
     for tweet in tweets_of_interest:
         # Figure out if tweet is relevant to award category we are looking at
+        max_count = 0
+        best_i = -1
+        best_award = ""
         for i, award in enumerate(gold_award_names):
             count = 0
             for match in key_award_words[award]:
                 if match.lower() in tweet.lower():
                     count += 1
             # Move on to next category if not enough matches were found in the tweet
-            if count < 4 and count < len(award.split()) - 1:
+            if (count < 2):
                 continue
+            # Find the best match for the category, and prefer shorter categories if there's a tie
+            if (count > max_count):
+                max_count = count
+                best_i = i
+                best_award = award
+            elif (count == max_count):
+                if (len(award.split()) < len(best_award.split())):
+                    max_count = count
+                    best_i = i
+                    best_award = award
 
-            # Determine if we should look for a person or movie titles:
-            aw_type = ""
-            name_types = ["director", "actor", "actress", "cecil", "demille"]
-            for n_t in name_types:
-                if n_t in award:
-                    aw_type = "person"
-                    break
-            
-            if (aw_type == "person"):
-                find_name(tweet, win_candidates[i])
-            print(win_candidates)
+        if best_i == -1:
+            continue
+
+        # Reset the names because I'm lazy
+        i = best_i
+        award = best_award
+        # Determine if we should look for a person or movie titles:
+        aw_type = ""
+        name_types = ["director", "actor", "actress", "cecil", "demille"]
+        for n_t in name_types:
+            if n_t in award:
+                aw_type = "person"
+                break
+        
+        if (aw_type == "person"):
+            find_name(tweet, win_candidates[i])
+
+    for i in range(len(win_candidates)):
+        win_candidates[i] = Counter(win_candidates[i])
+        if len(win_candidates[i]) > 0:
+            win_candidates[i] = win_candidates[i].most_common(1)[0][0]
+        else:
+            win_candidates[i] = "not found"
+    print(win_candidates)
 
 
 def find_name(tweet, current_dict):
@@ -148,7 +213,7 @@ def get_keywords_from_awards(award_names):
     key_award_words = {}
     for award in award_names:
         for tok in spacy_model(award):
-            if tok.pos_ == "NOUN" or tok.pos_ == "ADJ":
+            if tok.pos_ == "NOUN" or tok.pos_ == "ADJ" or tok.pos_ == "VERB":
                 if award in key_award_words:
                     key_award_words[award].append(str(tok))
                 else:
@@ -160,10 +225,35 @@ def get_keywords_from_awards(award_names):
                 else:
                     key_award_words[award] = [str(tok)]
 
-
+get_hosts()
 get_keywords_from_awards(gold_award_names)
 get_winners_gold()
-#print(key_award_words['best performance by an actress in a television series - comedy or musical'])
+#print(key_award_words)
+
+def output(hosts, award_names, presenters, nominees, winners):
+    output = "Hosts:"
+    for h in hosts:
+        output += h + ", "
+    output = output[:-2] + "\n\n"
+    for i in range(len(award_names)):
+        output += "Award " + award_names[i] + "\n"
+        output += "Presenters: "
+        for presenter in presenters[i]:
+            output += presenter + ", "
+        output = output[:-2] + "\nNominees: "
+        for nominee in nominees[i]:
+            output += nominee + ", "
+        output = output[:-2] + "\nWinner: " + winners[i] + "\n\n"
+    
+    json_output = {}
+    json_output['hosts'] = hosts
+    json_output["award_data"] = {}
+    for i in range(len(award_names)):
+        json_output["award_data"][award_names[i]] = {"nominees": nominees[i], "presenters": presenters[i], "winner": winners[i]}
+    with open(json_file_path.replace(".json","") + "our_answers.json", 'w') as data:
+        json.dump(json_output, data)
+
+    return output
 
 """
 def old_get_winners():
