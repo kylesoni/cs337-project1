@@ -27,8 +27,17 @@ for tweet in text:
     tweet = unidecode(tweet)
     tweet = " ".join(tweet.split())
 
+# Get "Gold" Award Names from the answer file
+answers_file = open('data\\gg2013answers.json')
+answers = json.load(answers_file)
+gold_categories = answers['award_data'].keys()
+gold_nominees = []
+for val in answers['award_data'].values():
+    gold_nominees.append(val['nominees'])
+
 # Regular Expressions for winners
-win_exprs = ['(wins|Wins|WINS|receives|received|won)(?= best| Best| BEST)', '(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)']
+before_win_exprs = ['(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)'] 
+after_win_exprs = ['(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)']
 
 # Regular Expressiosn for hosts
 host_exprs = ['(hosts?|Hosts?|HOSTS?|hosted by)[?!(will|should)]']
@@ -42,67 +51,45 @@ presenter_exprs = ['(presenters?|Presenters?|PRESENTERS?|presented by|present(ed
 win_candidates = []
 win_count = -1
 
-category_candidates = []
-category_count = -1
-
-test = []
-
-# for tweet in text:
-#     for expr in win_exprs:
-#         # example regex use
-#         var = re.findall(r"(.+) " + expr + " (.+)", tweet)
-#         if var:
-#             win_candidates.append([])
-#             win_count += 1
-#             category_candidates.append([])
-#             category_count += 1
-#             test.append(var)
-#             before = var[0][0].rsplit(None, var[0][0].count(' '))
-#             for i in range(0, len(before)):
-#                 new_candidate = before[-1]
-#                 for j in range(0, i):
-#                     new_candidate = before[len(before) - j - 2] + " " + new_candidate
-#                 win_candidates[win_count].append(new_candidate)
-#             after = var[0][2].rsplit(None, var[0][2].count(' '))
-#             for i in range(0, len(after)):
-#                 new_candidate = after[0]
-#                 for j in range(0, i):
-#                     new_candidate = new_candidate + " " + after[1 + j]
-#                 category_candidates[category_count].append(new_candidate)
-            
-    # for expr in host_exprs:
-    #     pass
-
-#print(win_candidates[1])
-#print(category_candidates[1])
-#print(test[1][0][0])
-
-answers_file = open('data\\gg2013answers.json')
-answers = json.load(answers_file)
-gold_categories = answers['award_data'].keys()
-gold_nominees = []
-for val in answers['award_data'].values():
-    gold_nominees.append(val['nominees'])
 win_candidates = [[] for i in range(len(gold_categories))]
 
-def winners_from_cats_noms(categories, nominees, tweet, filt_expr):
+def winners_from_cats_noms(categories, filt_expr, order):
     before = filt_expr[0][0].rsplit(None, filt_expr[0][0].count(' '))
     after = filt_expr[0][2].rsplit(None, filt_expr[0][0].count(' '))
-    after = [x.lower() for x in after]
     poss_wins = []
-
-    # Construct list of possible names
-    if len(before) > 3:
-        poss_wins.append(before[-2] + " " + before[-1])
-        poss_wins.append(before[-3] + " " + before[-2] + " " + before[-1])
-    elif len(before) > 2:
-        poss_wins.append(before[-2] + " " + before[-1])
+    if order == "before":
+        candidate_loc = before
+        award_name_loc = after
+        # Construct list of possible names for before expressions
+        for i in range(len(candidate_loc)):
+            candidate = candidate_loc[-1]
+            if i == 0:
+                poss_wins.append(candidate_loc[-1])
+            else:
+                for j in range(i):
+                    candidate = candidate_loc[-2 - j] + " " + candidate
+                poss_wins.append(candidate)
+    else:
+        candidate_loc = after
+        award_name_loc = before
+        # Construct list of possible names for after expressions
+        for i in range(len(candidate_loc)):
+            candidate = candidate_loc[0]
+            if i == 0:
+                poss_wins.append(candidate_loc[0])
+            else:
+                for j in range(i):
+                    candidate =  candidate + " " + candidate_loc[1 + j]
+                poss_wins.append(candidate)
+    
+    #print(poss_wins)
+    award_name_loc = [x.lower() for x in award_name_loc]
 
     # Try to best match category found to the gold standard list
     category_index = -1
     weights = [0 for x in range(len(gold_categories))]
     for i, gold_cat in enumerate(categories):
-        for expr in after:
+        for expr in award_name_loc:
             if expr in gold_cat:
                 weights[i] += 1
     if max(weights) > 1:
@@ -114,9 +101,13 @@ def winners_from_cats_noms(categories, nominees, tweet, filt_expr):
         for can in poss_wins:
             new = imdb_check_name(can, win_candidates[category_index])
             if new != 0:
-                print("made it this far")
                 win_candidates[category_index].append(new)
-    #print(win_candidates)
+                print(win_candidates)
+            else:
+                new_movie = imdb_check_title(can, win_candidates[category_index])
+                if new_movie !=0:
+                    win_candidates[category_index].append(new_movie)
+                    #print(win_candidates)
 
 def imdb_check_name(name, candidate_list):
     for i in range(len(candidate_list)):
@@ -130,7 +121,21 @@ def imdb_check_name(name, candidate_list):
     else:
         if len(person) > 0 and edit_distance(name, person[0]['name']) < 4:
             return (name, 10)
-    return 0    
+    return 0
+
+def imdb_check_title(name, candidate_list):
+    for i in range(len(candidate_list)):
+        if edit_distance(name, candidate_list[i][0]) < 2:
+            candidate_list[i] = (candidate_list[i][0], candidate_list[i][1] + 10)
+            return 0
+    try:
+            title = ia.search_movie(name)
+    except:
+        pass
+    else:
+        if len(title) > 0 and edit_distance(name, title[0]['title']) < 4:
+            return (name, 10)
+    return 0
 
 def total_votes(candidate_list, max_winner):
     actual_candidates = [[] for x in range(len(candidate_list))]
@@ -149,9 +154,13 @@ def total_votes(candidate_list, max_winner):
     return actual_candidates
 
 for tweet in text:
-    for expr in win_exprs:
+    for expr in before_win_exprs:
         var = re.findall(r"(.+) " + expr + " (.+)", tweet)
         if var:
-            winners_from_cats_noms(gold_categories, gold_nominees, tweet, var)
+            winners_from_cats_noms(gold_categories, var, "before")
+    for expr in after_win_exprs:
+        var = re.findall(r"(.+) " + expr + " (.+)", tweet)
+        if var:
+            winners_from_cats_noms(gold_categories, var, "after")
 
 print(total_votes(win_candidates, 1))
