@@ -3,9 +3,7 @@ import re
 from ftfy import fix_text
 from unidecode import unidecode
 import json
-import imdb
 from nltk import edit_distance
-import numpy as np
 import spacy
 import gzip
 import urllib
@@ -19,15 +17,19 @@ json_file_path = 'data\\gg2013.json'
 df = pd.read_json(json_file_path)
 
 # Get answers data
+# Note that we don't use this for anything besides getting the gold award names which we're allowed to use (please no automatic 0!)
+# Feel free to replace this or the corresponding "gold_award_names" with a file that's just the award names
 answers_file = open('data\\gg2013answers.json')
 answers = json.load(answers_file)
+
+# Get "Gold" Award Names from the answer file
+gold_award_names = answers['award_data'].keys()
 
 # Get syntactic parser
 spacy_model = spacy.load("en_core_web_sm")
 
-ia = imdb.Cinemagoer()
-
 # Get subset of imdb data based on year of awards
+# After downloading once, you can comment out the urls to save time
 #urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
 #urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
 imdb_names = gzip.open('data\\name.basics.tsv.gz')
@@ -84,24 +86,6 @@ for tweet in text:
     tweet = fix_text(tweet)
     tweet = unidecode(tweet)
     tweet = " ".join(tweet.split())
-
-# Get "Gold" Award Names from the answer file
-gold_award_names = answers['award_data'].keys()
-gold_nominees = []
-for val in answers['award_data'].values():
-    gold_nominees.append(val['nominees'])
-
-# Regular Expressiosn for hosts
-host_exprs = ['(hosts?|Hosts?|HOSTS?|hosted by)[?!(will|should)]']
-
-# Regular Expression for nominees
-nom_exprs = ['[?!(pretend|fake|was not|is not)](nominees?|Nominees?|NOMINEES?|nominated?)']
-
-presenter_exprs = ['(presenters?|Presenters?|PRESENTERS?|presented by|present(ed|s|ing))']
-
-# Intialize Candidate Lists
-win_candidates = []
-win_count = -1
 
 def get_best_dressed():
     best_dressed_candidates = {}
