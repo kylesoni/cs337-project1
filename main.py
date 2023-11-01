@@ -7,17 +7,50 @@ import imdb
 from nltk import edit_distance
 import numpy as np
 import spacy
+import gzip
+import urllib
 
-# Get syntactic parser
-spacy_model = spacy.load("en_core_web_sm")
+# Set year of awards
+master_year = 2013
 
 # Import data from json file
 df = pd.read_json('data\\gg2013.json')
 
+# Get IMDB data
+answers_file = open('data\\gg2013answers.json')
+answers = json.load(answers_file)
+
+# Get syntactic parser
+spacy_model = spacy.load("en_core_web_sm")
+
 ia = imdb.Cinemagoer()
 
-# actors = actor_df['primaryName']
-# print(actors)
+# Get subset of imdb data based on year of awards
+#urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
+imdb_names = gzip.open('data\\name.basics.tsv.gz')
+content = str(imdb_names.read())
+imdb_lines = content.split('\\n')
+imdb_fields = []
+for line in imdb_lines:
+    imdb_fields.append(line.split('\\t'))
+
+imdb_names = []
+
+for name in imdb_fields[1:len(imdb_fields)-1]:
+    # Determine if the person was active during the award show
+    if (name[2] == '\\\\N'):
+        continue
+    if (name[3] == '\\\\N' and int(name[2]) < master_year - 5):
+        imdb_names.append(name[1])
+    elif (name[3] == '\\\\N'):
+        continue
+    else:
+        if (int(name[3]) < int(name[2]) or int(name[3]) < master_year - 5 or int(name[2]) > master_year + 5):
+            pass
+        else:
+            imdb_names.append(name[1])
+
+print(imdb_names)
 
 # Get only the body of the tweets (ignore username, etc.) and clean it up
 text = df['text']
@@ -29,8 +62,6 @@ for tweet in text:
     tweet = " ".join(tweet.split())
 
 # Get "Gold" Award Names from the answer file
-answers_file = open('data\\gg2013answers.json')
-answers = json.load(answers_file)
 gold_award_names = answers['award_data'].keys()
 gold_nominees = []
 for val in answers['award_data'].values():
@@ -79,14 +110,28 @@ def get_winners_gold():
                 if match.lower() in tweet.lower():
                     count += 1
             # Move on to next category if not enough matches were found in the tweet
-            if count < 4:
+            if count < 4 and count < len(award.split()) - 1:
                 continue
-            else:
-                print(tweet)
-                print(award)
-                return
 
+            # Determine if we should look for a person or movie titles:
+            aw_type = ""
+            name_types = ["director", "actor", "actress", "cecil", "demille"]
+            for n_t in name_types:
+                if n_t in award:
+                    aw_type = "person"
+                    break
+            
+            raw_candidates = {}
+            if (aw_type == "person"):
+                uncleaned_dict = 0
+            else:
+                uncleaned_dict = 0
                 
+def find_name(tweet):
+    candidates = {}
+    name_pattern = re.compile('[A-Z][a-z]*\s[\w]+')
+
+
 def get_keywords_from_awards(award_names):
     global key_award_words
     key_award_words = {}
@@ -105,8 +150,8 @@ def get_keywords_from_awards(award_names):
                     key_award_words[award] = [str(tok)]
 
 
-get_keywords_from_awards(gold_award_names)
-get_winners_gold()
+#get_keywords_from_awards(gold_award_names)
+#get_winners_gold()
 #print(key_award_words['best performance by an actress in a television series - comedy or musical'])
 
 """
