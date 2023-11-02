@@ -2,7 +2,7 @@
 
 Group composed of Kyle Soni and Anges Vu
 
-To run get the JSON and human readable output, simply run main.py. However, you will need to change a few things if you want to change the data set. They are all located at the top of main.py:
+To get the JSON and human readable output, simply run main.py. However, you will need to change a few things if you want to change the data set. They are all located at the top of main.py:
 - master_year is the year of the award show
 - json_file_path to the path of the input
 - answers_file or gold_award_names to be the set of given gold_award_names (if the answer file is given, only the award names are scraped, the rest of the information is secure)
