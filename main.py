@@ -109,6 +109,55 @@ def get_best_dressed():
             break
     return best_dressed_candidates
 
+def get_worst_dressed():
+    worst_dressed_candidates = {}
+    worst_dressed_pattern = '(Worst Dressed|worst dressed|ugly|hideous|terrible|bad|weird|awful|disappointing|least favorite|don\'t like)'
+    fashion_dict = ['dress', 'skirt', 'tux', 'tuxedo', 'suit']
+    tweets_of_interest = df.text[df.text.str.contains(worst_dressed_pattern)].values.tolist()
+    for tweet in tweets_of_interest:
+        for fash in fashion_dict:
+            if fash in tweet:
+                find_name(tweet, worst_dressed_candidates)
+                break
+    worst_dressed_candidates = Counter(worst_dressed_candidates)
+    worst_dressed_ordered = worst_dressed_candidates.most_common(len(worst_dressed_candidates))
+    #print(hosts_ordered)
+    max_count = worst_dressed_ordered[0][1]
+    worst_dressed_candidates = []
+    for i in range(len(worst_dressed_ordered)):
+        if worst_dressed_ordered[i][1] > max_count * 0.33:
+            worst_dressed_candidates.append(worst_dressed_ordered[i][0])
+        else:
+            break
+    return worst_dressed_candidates
+
+def get_most_controversial():
+    liked_candidates = {}
+    disliked_candidates = {}
+    liked_pattern = '(love|happy|excited|yay|yes)'
+    disliked_pattern = '(hate|don\'t like|angry|no)'
+    positive_tweets = df.text[df.text.str.contains(liked_pattern)].values.tolist()
+    for tweet in positive_tweets:
+        find_name(tweet, liked_candidates)
+    negative_tweets = df.text[df.text.str.contains(disliked_pattern)].values.tolist()
+    for tweet in negative_tweets:
+        find_name(tweet, disliked_candidates)
+
+    controversial_candidates = {x:liked_candidates[x]-disliked_candidates[x] for x in liked_candidates if x in disliked_candidates}
+    #print(controversial_candidates)
+    if len(controversial_candidates) == 0:
+        ["no one was controversial"]
+    most_controversial = {}
+    for key, value in controversial_candidates.items():
+        most_controversial[key] = abs(value)
+    most_controversial = Counter(most_controversial)
+    most_controversial_ordered = most_controversial.most_common(len(most_controversial)).reverse()
+    print(most_controversial_ordered)
+    most_controversial = []
+    for i in range(len(most_controversial_ordered)):
+        most_controversial.append(most_controversial_ordered[0])
+    return most_controversial            
+
 def get_hosts():
     hosts_candidates = [{}]
     host_pattern = '(hosts?|Hosts?|HOSTS?|hosted by)[?!(will|should)]'
@@ -132,7 +181,37 @@ def get_hosts():
 
 def get_award_names():
     award_names_candidates = []
+    global __predicted_awards
+    awards = []
+    award_tweets_tracker = []
+
+    win_tweets = df.text[df.text.str.contains('(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)')].values.tolist()
+    nominee_tweets = df.text[df.text.str.contains('[?!(pretend|fake|was not|is not)](nominees?|Nominees?|NOMINEES?|nominated?)')]
+    presenter_tweets = df.text[df.text.str.contains('(presenters?|Presenters?|PRESENTERS?|presented by|present(ed|s|ing))')]
+
+    award_tweets = win_tweets
+    award_tweets.append(nominee_tweets)
+    award_tweets.append(presenter_tweets)
+    for tweet in award_tweets:
+        pattern = "Best ([A-z\s-]+)[A-Z][a-z]*[^A-z]"
+        if re.search(pattern, tweet):
+            award_tweets_tracker = re.search(pattern, tweet).group(0)[:-1]
+    tweet_dict = {}
+    for tweet in award_tweets_tracker:
+        if tweet in tweet_dict:
+            tweet_dict[tweet] += 1
+        else:
+            tweet_dict[tweet] = 1
+    awards_sorted = sorted(tweet_dict.items(), key=lambda tweet: tweet[1], reverse=True)
+    unofficial_awards = []
+    maxx = awards_sorted[0][1]
+    for key, val in awards_sorted:
+        unofficial_awards.append(key)
+        if val > (0.3 * maxx):
+            awards.append(key)
     return award_names_candidates
+
+print(get_award_names())
 
 def get_presenters_gold():
     presenter_candidates = [{} for i in range(len(gold_award_names))]
@@ -396,7 +475,7 @@ get_keywords_from_awards(gold_award_names)
 #get_winners_gold()
 #print(key_award_words)
 #get_nominees_gold()
-print(get_best_dressed())
+#print(get_most_controversial())
 
 def record_data(hosts, award_names, presenters, nominees, winners, modification):
     output = "Hosts:"
