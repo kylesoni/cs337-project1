@@ -181,47 +181,77 @@ def get_hosts():
 
 def get_award_names():
     award_names_candidates = []
-    global __predicted_awards
-    awards = []
-    award_tweets_tracker = []
+    current_index = -1
+    before_exprs = ['(goes to| Goes To| GOES TO)', '(presenters?|Presenters?|PRESENTERS?|presented by|present(ed|s|ing))']
+    after_exprs = ['(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))', '(is nominated|nominees for|nominees of)']
+    for expr in before_exprs:
+        tweets_of_interest = df.text[df.text.str.contains(expr)].values.tolist()
+        for tweet in tweets_of_interest:
+            var = re.findall(r"(.+) " + expr + " (.+)", tweet)
+            if var:
+                before = var[0][0].rsplit(None, var[0][0].count(' '))
+                for i in range(len(before)):
+                    candidate = before[-1]
+                    if i == 0:
+                        award_names_candidates.append([before[-1]])
+                        current_index += 1
+                    else:
+                        for j in range(i):
+                            if "#" in before[-2 - j]:
+                                break
+                            candidate = before[-2 - j] + " " + candidate
+                            if 'best' not in candidate and 'Best' not in candidate:
+                                continue
+                            award_names_candidates[current_index].append(candidate)
+    for expr in after_exprs:
+        tweets_of_interest = df.text[df.text.str.contains(expr)].values.tolist()
+        for tweet in tweets_of_interest:
+            var = re.findall(r"(.+) " + expr + " (.+)", tweet)
+            if var and len(var[0]) > 3:
+                after = var[0][2].rsplit(None, var[0][0].count(' '))
+                for i in range(len(after)):
+                    candidate = after[0]
+                    if i == 0:
+                        if 'best' not in after[0]:
+                            break
+                        award_names_candidates.append([after[0]])
+                        current_index += 1
+                    else:
+                        for j in range(i):
+                            if "#" in after[1 + j]:
+                                break
+                            candidate =  candidate + " " + after[1 + j]
+                            if 'best' not in candidate and 'Best' not in candidate:
+                                continue
+                            award_names_candidates[current_index].append(candidate)
+    merged_awards = {}
+    final_award_candidates = []
+    for award_list in award_names_candidates:
+        for award in award_list:
+            if ('best' in award.split(' ', 1)[0] or 'Best' in award.split(' ', 1)[0]):
+                if award in merged_awards:
+                    merged_awards[award] += 1
+                else:
+                    merged_awards[award] = 1
+    merged_awards = Counter(merged_awards)
+    sorted_merged_awards = merged_awards.most_common(len(merged_awards))
+    too_far = 1
+    max_count = sorted_merged_awards[0][1]
+    for j in range(1, len(sorted_merged_awards)):
+        if too_far < 20 and sorted_merged_awards[j][1] > max_count * 0.05 :
+            final_award_candidates.append(sorted_merged_awards[j][0])
+            too_far += 1
+    return final_award_candidates
 
-    win_tweets = df.text[df.text.str.contains('(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)')].values.tolist()
-    nominee_tweets = df.text[df.text.str.contains('[?!(pretend|fake|was not|is not)](nominees?|Nominees?|NOMINEES?|nominated?)')]
-    presenter_tweets = df.text[df.text.str.contains('(presenters?|Presenters?|PRESENTERS?|presented by|present(ed|s|ing))')]
-
-    award_tweets = win_tweets
-    award_tweets.append(nominee_tweets)
-    award_tweets.append(presenter_tweets)
-    for tweet in award_tweets:
-        pattern = "Best ([A-z\s-]+)[A-Z][a-z]*[^A-z]"
-        if re.search(pattern, tweet):
-            award_tweets_tracker = re.search(pattern, tweet).group(0)[:-1]
-    tweet_dict = {}
-    for tweet in award_tweets_tracker:
-        if tweet in tweet_dict:
-            tweet_dict[tweet] += 1
-        else:
-            tweet_dict[tweet] = 1
-    awards_sorted = sorted(tweet_dict.items(), key=lambda tweet: tweet[1], reverse=True)
-    unofficial_awards = []
-    maxx = awards_sorted[0][1]
-    for key, val in awards_sorted:
-        unofficial_awards.append(key)
-        if val > (0.3 * maxx):
-            awards.append(key)
-    return award_names_candidates
-
-print(get_award_names())
-
-def get_presenters_gold():
-    presenter_candidates = [{} for i in range(len(gold_award_names))]
+def get_presenters_gold(award_names):
+    presenter_candidates = [{} for i in range(len(award_names))]
     presenter_pattern = '(presenters?|Presenters?|PRESENTERS?|presented by|present(ed|s|ing))'
     tweets_of_interest = df.text[df.text.str.contains(presenter_pattern)].values.tolist()
     for tweet in tweets_of_interest:
         max_count = 0
         best_i = -1
         best_award = ""
-        for i, award in enumerate(gold_award_names):
+        for i, award in enumerate(award_names):
             count = 0
             for match in key_award_words[award]:
                 if match.lower() in tweet.lower():
@@ -266,8 +296,8 @@ def get_presenters_gold():
     #print(presenter_candidates)
     return presenter_candidates
 
-def get_nominees_gold():
-    nominees_candidates = [{} for i in range(len(gold_award_names))]
+def get_nominees_gold(award_names):
+    nominees_candidates = [{} for i in range(len(award_names))]
     nominee_pattern = '[?!(pretend|fake|was not|is not)](nominees?|Nominees?|NOMINEES?|nominated?)|(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
     tweets_of_interest = df.text[df.text.str.contains(nominee_pattern)].values.tolist()
     for tweet in tweets_of_interest:
@@ -275,7 +305,7 @@ def get_nominees_gold():
         max_count = 0
         best_i = -1
         best_award = ""
-        for i, award in enumerate(gold_award_names):
+        for i, award in enumerate(award_names):
             count = 0
             for match in key_award_words[award]:
                 if match.lower() in tweet.lower():
@@ -312,7 +342,7 @@ def get_nominees_gold():
             find_name(tweet, nominees_candidates[i])
         else:
             find_title(tweet, nominees_candidates[i], 'is nominated', "before")
-            find_title(tweet, nominees_candidates[i], '(nominees for|nominees of)', "after")
+            find_title(tweet, nominees_candidates[i], '(nominees for|nominees of)', "before")
 
     #print(nominees_candidates)
     for i in range(len(nominees_candidates)):
@@ -334,8 +364,8 @@ def get_nominees_gold():
     #print(nominees_candidates)
     return nominees_candidates
 
-def get_winners_gold():
-    win_candidates = [{} for i in range(len(gold_award_names))]
+def get_winners_gold(award_names):
+    win_candidates = [{} for i in range(len(award_names))]
     # Filter tweets down to winners only
     win_pattern = '(wins|Wins|WINS|receiv(es|ed)|won)(?= best| Best| BEST)|(best(.+)|Best(.+)|BEST(.+))(?= goes to| Goes To| GOES TO)'
     tweets_of_interest = df.text[df.text.str.contains(win_pattern)].values.tolist()
@@ -344,7 +374,7 @@ def get_winners_gold():
         max_count = 0
         best_i = -1
         best_award = ""
-        for i, award in enumerate(gold_award_names):
+        for i, award in enumerate(award_names):
             count = 0
             for match in key_award_words[award]:
                 if match.lower() in tweet.lower():
@@ -471,12 +501,6 @@ def get_keywords_from_awards(award_names):
                 else:
                     key_award_words[award] = [str(tok)]
 
-get_keywords_from_awards(gold_award_names)
-#get_winners_gold()
-#print(key_award_words)
-#get_nominees_gold()
-#print(get_most_controversial())
-
 def record_data(hosts, award_names, presenters, nominees, winners, modification):
     output = "Hosts:"
     for h in hosts:
@@ -503,4 +527,8 @@ def record_data(hosts, award_names, presenters, nominees, winners, modification)
     return output
 
 get_keywords_from_awards(gold_award_names)
-#print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(), get_nominees_gold(), get_winners_gold(), "gold"))
+print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(list(gold_award_names)), get_nominees_gold(list(gold_award_names)), get_winners_gold(list(gold_award_names)), "gold"))
+
+our_awards = get_award_names()
+get_keywords_from_awards(our_awards)
+print(record_data(get_hosts(), our_awards, get_presenters_gold(our_awards), get_nominees_gold(our_awards), get_winners_gold(our_awards), ""))
