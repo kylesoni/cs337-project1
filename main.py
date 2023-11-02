@@ -30,8 +30,8 @@ spacy_model = spacy.load("en_core_web_sm")
 
 # Get subset of imdb data based on year of awards
 # After downloading once, you can comment out the urls to save time
-#urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
-#urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
+urllib.request.urlretrieve('https://datasets.imdbws.com/name.basics.tsv.gz', 'data\\name.basics.tsv.gz')
+urllib.request.urlretrieve('https://datasets.imdbws.com/title.basics.tsv.gz', 'data\\title.basics.tsv.gz')
 imdb_names = gzip.open('data\\name.basics.tsv.gz')
 content = str(imdb_names.read())
 imdb_lines = content.split('\\n')
@@ -151,11 +151,11 @@ def get_most_controversial():
     for key, value in controversial_candidates.items():
         most_controversial[key] = abs(value)
     most_controversial = Counter(most_controversial)
-    most_controversial_ordered = most_controversial.most_common(len(most_controversial)).reverse()
-    print(most_controversial_ordered)
+    most_controversial_ordered = most_controversial.most_common(len(most_controversial))
+    #print(most_controversial_ordered)
     most_controversial = []
-    for i in range(len(most_controversial_ordered)):
-        most_controversial.append(most_controversial_ordered[0])
+    for i in range(4):
+        most_controversial.append(most_controversial_ordered[-1 - i][0])
     return most_controversial            
 
 def get_hosts():
@@ -501,8 +501,8 @@ def get_keywords_from_awards(award_names):
                 else:
                     key_award_words[award] = [str(tok)]
 
-def record_data(hosts, award_names, presenters, nominees, winners, modification):
-    output = "Hosts:"
+def record_data(hosts, award_names, presenters, nominees, winners, modification, best_dressed, worst_dressed, most_controversial):
+    output = "Hosts: "
     for h in hosts:
         output += h + ", "
     output = output[:-2] + "\n\n"
@@ -516,6 +516,22 @@ def record_data(hosts, award_names, presenters, nominees, winners, modification)
             output += nominee + ", "
         output = output[:-2] + "\nWinner: " + winners[i] + "\n\n"
     
+    output += "Extras: \n"
+    output += "Best Dressed: "
+    for i in best_dressed:
+        output += i + ", "
+    output = output[:-2] + "\n\n"
+
+    output += "Worst Dressed: "
+    for i in worst_dressed:
+        output += i + ", "
+    output = output[:-2] + "\n\n"
+
+    output += "Most Controversial: "
+    for i in most_controversial:
+        output += i + ", "
+    output = output[:-2] + "\n\n"
+    
     json_output = {}
     json_output['hosts'] = hosts
     json_output["award_data"] = {}
@@ -527,8 +543,8 @@ def record_data(hosts, award_names, presenters, nominees, winners, modification)
     return output
 
 get_keywords_from_awards(gold_award_names)
-print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(list(gold_award_names)), get_nominees_gold(list(gold_award_names)), get_winners_gold(list(gold_award_names)), "gold"))
+print(record_data(get_hosts(), list(gold_award_names), get_presenters_gold(list(gold_award_names)), get_nominees_gold(list(gold_award_names)), get_winners_gold(list(gold_award_names)), "gold", get_best_dressed(), get_worst_dressed(), get_most_controversial()))
 
 our_awards = get_award_names()
 get_keywords_from_awards(our_awards)
-print(record_data(get_hosts(), our_awards, get_presenters_gold(our_awards), get_nominees_gold(our_awards), get_winners_gold(our_awards), ""))
+print(record_data(get_hosts(), our_awards, get_presenters_gold(our_awards), get_nominees_gold(our_awards), get_winners_gold(our_awards), "", get_best_dressed(), get_worst_dressed(), get_most_controversial()))
